@@ -5,6 +5,7 @@
 #' @param access_token Access Token from the https://apps.twitter.com/
 #' @param access_secret Access Token Secret from https://apps.twitter.com/
 #' @param status_ids data frame of tweet IDs
+#' @param group_start is the group to start at for the split list of IDs.  Is useful so that you do not have to restart from the beginning in case download is interrupted
 #'
 #' @return A tibble of tweets data.
 #'
@@ -13,7 +14,7 @@
 #' @import tibble
 #' @importFrom dplyr bind_rows count
 
-download_tweets <- function(consumer_key, consumer_secret, access_token, access_secret, status_ids) {
+download_tweets <- function(consumer_key, consumer_secret, access_token, access_secret, status_ids, group_start=1) {
   create_token(
     app = "Download Tweets",
     consumer_key = consumer_key,
@@ -29,12 +30,15 @@ download_tweets <- function(consumer_key, consumer_secret, access_token, access_
   # Split the status ids in groups of 89,990 in order to advoid the 90,000/15 min api call limit
   rate_limited_status_ids <- split(status_ids, ceiling(seq_along(status_ids)/89990))
 
+  # Keep only those groups specified by the user
+  rate_limited_status_ids <- rate_limited_status_ids[group_start:length(rate_limited_status_ids)]
+
   # Create an empty tibble to store the downloaded tweets
   tweets <- tibble()
 
   message(sprintf("%s - Splitting tweets into %s groups", Sys.time(), length(rate_limited_status_ids)))
 
-  counter <- 1
+  counter <- group_start
 
   for (statuses in rate_limited_status_ids) {
     total_loop_time <- 0
@@ -62,7 +66,7 @@ download_tweets <- function(consumer_key, consumer_secret, access_token, access_
     # Calculate the time it took to download the tweets
     total_loop_time = as.integer(difftime(loop_end_time, loop_start_time, units = "secs"))
 
-    # If there are multiple loops, then each loop must take at 15.25 mintues (915 seconds)
+    # If there are multiple loops, then each loop must take at 15.25 minutes (915 seconds)
     # to avoid the api call limit
     if (total_loop_time < 915 && counter < length(rate_limited_status_ids)) {
       sleep_time <- 915 - total_loop_time
